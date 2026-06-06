@@ -49,10 +49,44 @@ button:disabled {
   font: inherit;
 }
 
+.key-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.key-actions button {
+  background: #555;
+  flex-shrink: 0;
+}
+
+.key-status {
+  font-size: 13px;
+  color: #888;
+}
+
+.key-status.success {
+  color: #22a022;
+}
+
+.key-status.error {
+  color: #cc0000;
+}
+
+.video-meta {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .status {
   min-height: 1.2em;
   color: #888;
-  margin: 8px 0;
+  margin: 4px 0 8px;
 }
 
 .status.error {
