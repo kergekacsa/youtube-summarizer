@@ -1,30 +1,34 @@
 import { summarize, type Summary } from "../../lib/summarize";
+import { validateApiKey, canSummarize, type ValidateResult } from "../../lib/validate-api-key";
 import { normalizeJson3 } from "../../lib/transcript";
 import { extractChapters } from "../../lib/chapters";
 import { parseVideoMetadata, formatDuration, formatTranscriptStep } from "../../lib/video-metadata";
-import { loadSettings, DEFAULT_SETTINGS, type Settings, type StorageLike } from "../../lib/settings";
+import { loadSettings, saveSettings, MODELS, type StorageLike } from "../../lib/settings";
 import { renderSummary } from "./render";
 import type { ContentRequest, TranscriptReply, PlayerResponseReply } from "../messages";
 
 const storage = chrome.storage.local as unknown as StorageLike;
 
-let settings: Settings = DEFAULT_SETTINGS;
+let lastTestResult: ValidateResult | null = null;
 
 const els = {
   summarize: document.getElementById("summarize") as HTMLButtonElement,
-  settingsBtn: document.getElementById("settings-btn") as HTMLButtonElement,
-  noKey: document.getElementById("no-key") as HTMLParagraphElement,
-  openSettings: document.getElementById("open-settings") as HTMLAnchorElement,
+  settingsRow: document.getElementById("settings-row") as HTMLDetailsElement,
+  apiKey: document.getElementById("api-key") as HTMLInputElement,
+  testKey: document.getElementById("test-key") as HTMLButtonElement,
+  keyStatus: document.getElementById("key-status") as HTMLSpanElement,
+  model: document.getElementById("model") as HTMLSelectElement,
   status: document.getElementById("status") as HTMLParagraphElement,
   videoMeta: document.getElementById("video-meta") as HTMLParagraphElement,
   output: document.getElementById("output") as HTMLElement,
 };
 
 function applyKeyState(): void {
-  const hasKey = settings.apiKey.length > 0;
-  els.summarize.disabled = !hasKey;
-  els.noKey.hidden = hasKey;
-  if (hasKey) {
+  const enabled = canSummarize(els.apiKey.value.trim(), lastTestResult);
+  els.summarize.disabled = !enabled;
+  if (!enabled) {
+    setStatus("Add a valid API key in Settings to summarize.", true);
+  } else {
     els.status.textContent = "";
     els.status.classList.remove("error");
   }
@@ -33,10 +37,6 @@ function applyKeyState(): void {
 function setStatus(text: string, isError = false): void {
   els.status.textContent = text;
   els.status.classList.toggle("error", isError);
-}
-
-function openSettings(): void {
-  void chrome.runtime.openOptionsPage();
 }
 
 function isWatchUrl(url: string | undefined): boolean {
@@ -75,9 +75,10 @@ async function run(): Promise<void> {
   els.videoMeta.textContent = "";
   els.videoMeta.hidden = true;
 
-  const { apiKey, model } = settings;
+  const apiKey = els.apiKey.value.trim();
   if (!apiKey) {
-    setStatus("Add your API key in settings to summarize.", true);
+    els.settingsRow.open = true;
+    setStatus("Add your Anthropic API key to summarize.", true);
     return;
   }
 
@@ -87,6 +88,8 @@ async function run(): Promise<void> {
     return;
   }
   const tabId = tab.id;
+  const videoId = new URL(tab.url!).searchParams.get("v") ?? "";
+  const model = els.model.value;
 
   els.summarize.disabled = true;
   try {
@@ -116,7 +119,7 @@ async function run(): Promise<void> {
     await new Promise<void>((r) => setTimeout(r, 0));
 
     els.output.append(
-      renderSummary(summary, (sec) => {
+      renderSummary(summary, videoId, (sec) => {
         const seek: ContentRequest = { type: "seek", sec };
         void chrome.tabs.sendMessage(tabId, seek).catch(() => undefined);
       }),
@@ -129,26 +132,51 @@ async function run(): Promise<void> {
   }
 }
 
+async function runTestKey(): Promise<void> {
+  const apiKey = els.apiKey.value.trim();
+  if (!apiKey) {
+    els.keyStatus.textContent = "Enter a key first.";
+    els.keyStatus.className = "key-status error";
+    return;
+  }
+
+  els.testKey.disabled = true;
+  els.keyStatus.textContent = "Testing…";
+  els.keyStatus.className = "key-status";
+
+  const result = await validateApiKey(apiKey);
+  lastTestResult = result;
+
+  els.keyStatus.textContent = result.ok ? `✓ ${result.message}` : `✗ ${result.message}`;
+  els.keyStatus.className = `key-status ${result.ok ? "success" : "error"}`;
+  els.testKey.disabled = false;
+  applyKeyState();
+}
+
+async function persistSettings(): Promise<void> {
+  await saveSettings({ apiKey: els.apiKey.value.trim(), model: els.model.value }, storage);
+}
+
 async function init(): Promise<void> {
-  settings = await loadSettings(storage);
+  for (const m of MODELS) {
+    const option = document.createElement("option");
+    option.value = m.id;
+    option.textContent = m.label;
+    els.model.append(option);
+  }
+
+  const settings = await loadSettings(storage);
+  els.apiKey.value = settings.apiKey;
+  els.model.value = settings.model;
   applyKeyState();
 
-  chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === "local" && changes["settings"]) {
-      const next = changes["settings"].newValue as Partial<Settings> | undefined;
-      settings = {
-        apiKey: typeof next?.apiKey === "string" ? next.apiKey : DEFAULT_SETTINGS.apiKey,
-        model: typeof next?.model === "string" ? next.model : DEFAULT_SETTINGS.model,
-      };
-      applyKeyState();
-    }
+  els.apiKey.addEventListener("change", () => {
+    lastTestResult = null;
+    void persistSettings();
+    applyKeyState();
   });
-
-  els.settingsBtn.addEventListener("click", openSettings);
-  els.openSettings.addEventListener("click", (e) => {
-    e.preventDefault();
-    openSettings();
-  });
+  els.model.addEventListener("change", () => void persistSettings());
+  els.testKey.addEventListener("click", () => void runTestKey());
   els.summarize.addEventListener("click", () => void run());
 }
 

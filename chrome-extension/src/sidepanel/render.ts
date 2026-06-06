@@ -1,4 +1,5 @@
 import type { Summary } from "../../lib/summarize";
+import { timestampUrl } from "../../lib/render-utils";
 
 /** Format whole seconds as `m:ss`, or `h:mm:ss` past an hour. */
 export function formatTimestamp(totalSeconds: number): string {
@@ -12,10 +13,15 @@ export function formatTimestamp(totalSeconds: number): string {
 
 /**
  * Render a Summary into DOM: one block per section with a clickable timestamp,
- * the title, and the summary text. `onSeek` fires with the section's start second.
+ * the title, and the summary text.
+ *
+ * The timestamp is an <a> whose href points to the timestamped YouTube URL so
+ * middle-click / Cmd+click opens it in a new tab. A plain left-click still
+ * seeks the current tab via `onSeek` without navigating.
  */
 export function renderSummary(
   summary: Summary,
+  videoId: string,
   onSeek: (sec: number) => void,
 ): DocumentFragment {
   const frag = document.createDocumentFragment();
@@ -27,11 +33,16 @@ export function renderSummary(
     const head = document.createElement("div");
     head.className = "section-head";
 
-    const timestamp = document.createElement("button");
-    timestamp.type = "button";
+    const timestamp = document.createElement("a");
     timestamp.className = "timestamp";
+    timestamp.href = timestampUrl(videoId, section.sec);
     timestamp.textContent = formatTimestamp(section.sec);
-    timestamp.addEventListener("click", () => onSeek(section.sec));
+    timestamp.addEventListener("click", (e) => {
+      if (!e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        onSeek(section.sec);
+      }
+    });
 
     const title = document.createElement("span");
     title.className = "section-title";

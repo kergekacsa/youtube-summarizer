@@ -11,6 +11,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["lib/**/*.test.ts"],
+    include: ["lib/**/*.test.ts", "src/**/*.test.ts"],
+    environmentMatchGlobs: [["src/**/*.test.ts", "jsdom"]],
   },
 });
