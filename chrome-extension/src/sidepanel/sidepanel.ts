@@ -1,6 +1,7 @@
 import { summarize, type Summary } from "../../lib/summarize";
+import { normalizeJson3 } from "../../lib/transcript";
 import { renderSummary } from "./render";
-import type { ContentRequest, PlayerResponseReply } from "../messages";
+import type { ContentRequest, TranscriptReply } from "../messages";
 
 // For this walking-skeleton slice the model is fixed and the key lives in a
 // minimal field. Model selection and a real settings page are a later slice.
@@ -29,16 +30,18 @@ async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
   return tab;
 }
 
-async function getPlayerResponse(tabId: number): Promise<unknown | null> {
-  const request: ContentRequest = { type: "getPlayerResponse" };
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const reply = (await chrome.tabs
-      .sendMessage(tabId, request)
-      .catch(() => undefined)) as PlayerResponseReply | undefined;
-    if (reply?.playerResponse) return reply.playerResponse;
-    await new Promise((resolve) => setTimeout(resolve, 400));
+async function fetchTranscript(tabId: number): Promise<string> {
+  const request: ContentRequest = { type: "getTranscript" };
+  const reply = (await chrome.tabs
+    .sendMessage(tabId, request)
+    .catch(() => undefined)) as TranscriptReply | undefined;
+  if (!reply) {
+    throw new Error("Couldn't reach the YouTube page. Reload it and try again.");
   }
-  return null;
+  if (reply.error || !reply.json3) {
+    throw new Error(reply.error ?? "No transcript available for this video.");
+  }
+  return reply.json3;
 }
 
 async function run(): Promise<void> {
@@ -60,16 +63,13 @@ async function run(): Promise<void> {
 
   els.summarize.disabled = true;
   try {
-    setStatus("Reading video metadata…");
-    const playerResponse = await getPlayerResponse(tabId);
-    if (!playerResponse) {
-      setStatus("Couldn't read this video's data — reload the page and retry.", true);
-      return;
-    }
+    setStatus("Fetching transcript…");
+    const json3 = await fetchTranscript(tabId);
+    const transcript = normalizeJson3(json3);
 
     setStatus(`Summarizing with ${DEFAULT_MODEL}…`);
     const summary: Summary = await summarize({
-      playerResponse,
+      transcript,
       model: DEFAULT_MODEL,
       apiKey,
     });

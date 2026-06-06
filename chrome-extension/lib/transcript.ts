@@ -6,25 +6,31 @@ export interface TranscriptSegment {
   text: string;
 }
 
-export interface ExtractTranscriptDeps {
-  fetch: (url: string) => Promise<Response>;
-}
-
 /**
- * Read the caption-track URL out of a YouTube player response, fetch it as
- * json3, and normalize each caption event to a {@link TranscriptSegment}.
+ * Normalize a YouTube json3 caption payload into {@link TranscriptSegment}s.
+ *
+ * The bytes come from the page's own (authorized) caption request — see the
+ * content-script interceptor — not from a direct `baseUrl` fetch, which YouTube
+ * now blocks without a proof-of-origin token.
  */
-export async function extractTranscript(
-  playerResponse: unknown,
-  deps: ExtractTranscriptDeps,
-): Promise<TranscriptSegment[]> {
-  const baseUrl = captionTrackUrl(playerResponse);
-  const res = await deps.fetch(`${baseUrl}&fmt=json3`);
-  const json3 = (await res.json()) as Json3;
+export function normalizeJson3(raw: string): TranscriptSegment[] {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new Error(
+      "Caption track returned an empty response — the transcript may be unavailable for this video.",
+    );
+  }
+
+  let json3: Json3;
+  try {
+    json3 = JSON.parse(trimmed) as Json3;
+  } catch {
+    throw new Error("Caption track response was not valid json3.");
+  }
 
   return (json3.events ?? [])
     .map((event) => ({
-      sec: Math.floor(event.tStartMs / 1000),
+      sec: Math.floor((event.tStartMs ?? 0) / 1000),
       text: (event.segs ?? [])
         .map((s) => s.utf8 ?? "")
         .join("")
@@ -33,24 +39,6 @@ export async function extractTranscript(
     .filter((segment) => segment.text !== "");
 }
 
-function captionTrackUrl(playerResponse: unknown): string {
-  const tracks = (playerResponse as PlayerResponse)?.captions
-    ?.playerCaptionsTracklistRenderer?.captionTracks;
-  const baseUrl = tracks?.[0]?.baseUrl;
-  if (!baseUrl) {
-    throw new Error("No caption track found in player response");
-  }
-  return baseUrl;
-}
-
-interface PlayerResponse {
-  captions?: {
-    playerCaptionsTracklistRenderer?: {
-      captionTracks?: { baseUrl?: string }[];
-    };
-  };
-}
-
 interface Json3 {
-  events?: { tStartMs: number; segs?: { utf8?: string }[] }[];
+  events?: { tStartMs?: number; segs?: { utf8?: string }[] }[];
 }

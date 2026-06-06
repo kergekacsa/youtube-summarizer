@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import schema from "../../shared/schema.json";
 import promptText from "../../shared/prompt.md?raw";
-import { extractTranscript, type TranscriptSegment } from "./transcript";
+import type { TranscriptSegment } from "./transcript";
 
 /** One section of the generated summary. */
 export interface Section {
@@ -26,32 +26,28 @@ export interface AnthropicLike {
 }
 
 export interface SummarizeInput {
-  playerResponse: unknown;
+  /** Normalized transcript segments — see `normalizeJson3`. */
+  transcript: TranscriptSegment[];
   model: string;
   apiKey: string;
 }
 
 export interface SummarizeDeps {
   createAnthropic?: (apiKey: string) => AnthropicLike;
-  fetch?: (url: string) => Promise<Response>;
 }
 
 const MAX_TOKENS = 4096;
 
 /**
- * Orchestrate one summary: extract the transcript, build the prompt, force
- * Claude to call the `submit_summary` tool, and return the validated summary.
+ * Orchestrate one summary: build the prompt from the transcript, force Claude
+ * to call the `submit_summary` tool, and return the validated summary. How the
+ * transcript bytes are obtained is the caller's concern.
  */
 export async function summarize(
   input: SummarizeInput,
   deps: SummarizeDeps = {},
 ): Promise<Summary> {
   const createAnthropic = deps.createAnthropic ?? defaultCreateAnthropic;
-  const fetchFn = deps.fetch ?? ((url: string) => fetch(url));
-
-  const segments = await extractTranscript(input.playerResponse, {
-    fetch: fetchFn,
-  });
 
   const client = createAnthropic(input.apiKey);
   const message = await client.messages.create({
@@ -60,7 +56,7 @@ export async function summarize(
     system: promptText,
     tools: [schema],
     tool_choice: { type: "tool", name: "submit_summary" },
-    messages: [{ role: "user", content: renderTranscript(segments) }],
+    messages: [{ role: "user", content: renderTranscript(input.transcript) }],
   });
 
   return parseSummary(message.content);

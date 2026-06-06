@@ -1,28 +1,23 @@
 import { describe, it, expect } from "vitest";
-import playerResponse from "../../shared/fixtures/synthetic/player-response.json";
 import captionsJson3 from "../../shared/fixtures/synthetic/captions.json3.json";
-import { extractTranscript } from "./transcript";
+import { normalizeJson3 } from "./transcript";
 
-describe("extractTranscript", () => {
-  it("fetches the caption track as json3 and returns normalized segments", async () => {
-    const fetched: string[] = [];
-    const fakeFetch = async (url: string) => {
-      fetched.push(url);
-      return new Response(JSON.stringify(captionsJson3));
-    };
+describe("normalizeJson3", () => {
+  it("normalizes a json3 payload into floor-second segments", () => {
+    const segments = normalizeJson3(JSON.stringify(captionsJson3));
 
-    const segments = await extractTranscript(playerResponse, { fetch: fakeFetch });
-
-    // It requested the caption track's baseUrl with the json3 format.
-    expect(fetched).toHaveLength(1);
-    expect(fetched[0]).toBe(
-      "https://example.test/api/timedtext?v=abc123&lang=en&fmt=json3",
-    );
-
-    // sec = floor(tStartMs/1000); multi-seg events are joined.
+    // sec = floor(tStartMs/1000); multi-seg events are joined; empties dropped.
     expect(segments).toEqual([
       { sec: 0, text: "Hello world" },
       { sec: 3, text: "this is the second line" },
     ]);
+  });
+
+  it("throws a legible error when the payload is empty", () => {
+    expect(() => normalizeJson3("")).toThrow(/empty/i);
+  });
+
+  it("throws when the payload is not valid json3", () => {
+    expect(() => normalizeJson3("<xml>not json</xml>")).toThrow(/json3/i);
   });
 });

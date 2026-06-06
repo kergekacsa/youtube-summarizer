@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import playerResponse from "../../shared/fixtures/synthetic/player-response.json";
-import captionsJson3 from "../../shared/fixtures/synthetic/captions.json3.json";
 import { summarize } from "./summarize";
+import type { TranscriptSegment } from "./transcript";
 
-function fakeFetch() {
-  return async () => new Response(JSON.stringify(captionsJson3));
-}
+const TRANSCRIPT: TranscriptSegment[] = [
+  { sec: 0, text: "Hello world" },
+  { sec: 3, text: "this is the second line" },
+];
 
 describe("summarize", () => {
   it("forces the submit_summary tool and returns the parsed summary", async () => {
@@ -31,8 +31,8 @@ describe("summarize", () => {
     };
 
     const result = await summarize(
-      { playerResponse, model: "claude-opus-4-7", apiKey: "sk-test-key" },
-      { createAnthropic, fetch: fakeFetch() },
+      { transcript: TRANSCRIPT, model: "claude-opus-4-7", apiKey: "sk-test-key" },
+      { createAnthropic },
     );
 
     // Returns the validated summary from the tool call.
@@ -62,8 +62,8 @@ describe("summarize", () => {
 
     await expect(
       summarize(
-        { playerResponse, model: "claude-opus-4-7", apiKey: "sk-test-key" },
-        { createAnthropic, fetch: fakeFetch() },
+        { transcript: TRANSCRIPT, model: "claude-opus-4-7", apiKey: "sk-test-key" },
+        { createAnthropic },
       ),
     ).rejects.toThrow(/submit_summary/);
   });
