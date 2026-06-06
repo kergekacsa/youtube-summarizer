@@ -22,6 +22,12 @@ body {
   margin: 0;
 }
 
+.bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 button {
   font: inherit;
   padding: 6px 12px;
@@ -37,42 +43,30 @@ button:disabled {
   cursor: default;
 }
 
-.key-row {
-  margin: 10px 0;
+.icon-btn {
+  background: transparent;
+  color: inherit;
+  padding: 4px 6px;
+  font-size: 16px;
+  opacity: 0.6;
 }
 
-.key-row input {
-  width: 100%;
-  box-sizing: border-box;
-  margin-top: 6px;
-  padding: 6px 8px;
-  font: inherit;
+.icon-btn:hover {
+  opacity: 1;
 }
 
-.key-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.key-actions button {
-  background: #555;
-  flex-shrink: 0;
-}
-
-.key-status {
+.no-key {
+  margin: 8px 0;
   font-size: 13px;
   color: #888;
 }
 
-.key-status.success {
-  color: #22a022;
+.no-key a {
+  color: #3ea6ff;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
-.key-status.error {
-  color: #cc0000;
-}
 
 .video-meta {
   margin: 6px 0 0;
