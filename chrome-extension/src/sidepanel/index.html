@@ -10,15 +10,28 @@
     <main id="app">
       <header class="bar">
         <h1>Summarize</h1>
-        <div class="bar-actions">
-          <button id="summarize" type="button">Summarize this video</button>
-          <button id="settings-btn" type="button" class="icon-btn" title="Settings" aria-label="Open settings">⚙</button>
-        </div>
+        <button id="summarize" type="button">Summarize this video</button>
       </header>
 
-      <p id="no-key" class="no-key" hidden>
-        <a id="open-settings" href="#" role="button">Add your API key in settings</a> to summarize.
-      </p>
+      <details id="settings-row" class="settings-row">
+        <summary>Settings</summary>
+        <label for="api-key">API key</label>
+        <input
+          id="api-key"
+          type="password"
+          placeholder="sk-ant-…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="key-actions">
+          <button id="test-key" type="button">Test API key</button>
+          <span id="key-status" class="key-status" role="status"></span>
+        </div>
+        <div class="model-row">
+          <label for="model">Model</label>
+          <select id="model"></select>
+        </div>
+      </details>
 
       <p id="video-meta" class="video-meta" hidden></p>
       <p id="status" class="status" role="status"></p>
