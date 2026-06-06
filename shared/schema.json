@@ -1,0 +1,33 @@
+{
+  "name": "submit_summary",
+  "description": "Submit the structured, language-matched summary of the video. You MUST call this tool exactly once with the complete summary.",
+  "input_schema": {
+    "type": "object",
+    "required": ["language", "sections"],
+    "properties": {
+      "language": {
+        "type": "string",
+        "description": "ISO 639-1 code of the language Claude detected and wrote in"
+      },
+      "sections": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": ["sec", "title", "summary"],
+          "properties": {
+            "sec": {
+              "type": "integer",
+              "description": "Section start in seconds. MUST match an actual transcript-segment start time."
+            },
+            "title": { "type": "string" },
+            "summary": {
+              "type": "string",
+              "description": "2–4 concrete sentences. Not transcript verbatim."
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "captions": {
+    "playerCaptionsTracklistRenderer": {
+      "captionTracks": [
+        {
+          "baseUrl": "https://example.test/api/timedtext?v=abc123&lang=en",
+          "languageCode": "en",
+          "kind": "asr",
+          "name": { "simpleText": "English (auto-generated)" }
+        }
+      ]
+    }
+  },
+  "videoDetails": {
+    "videoId": "abc123",
+    "title": "Synthetic Test Video",
+    "lengthSeconds": "8"
+  }
+}

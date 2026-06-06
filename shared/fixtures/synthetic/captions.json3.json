@@ -1,0 +1,24 @@
+{
+  "events": [
+    {
+      "tStartMs": 0,
+      "dDurationMs": 3200,
+      "segs": [{ "utf8": "Hello " }, { "utf8": "world" }]
+    },
+    {
+      "tStartMs": 3200,
+      "dDurationMs": 2000,
+      "segs": [{ "utf8": "this is the second line" }]
+    },
+    {
+      "tStartMs": 5200,
+      "dDurationMs": 100,
+      "segs": [{ "utf8": "\n" }]
+    },
+    {
+      "tStartMs": 6000,
+      "dDurationMs": 2000,
+      "segs": [{ "utf8": "   " }]
+    }
+  ]
+}
