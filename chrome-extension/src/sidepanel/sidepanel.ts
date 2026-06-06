@@ -1,8 +1,10 @@
 import { summarize, type Summary } from "../../lib/summarize";
 import { validateApiKey, canSummarize, type ValidateResult } from "../../lib/validate-api-key";
 import { normalizeJson3 } from "../../lib/transcript";
+import { extractChapters } from "../../lib/chapters";
+import { parseVideoMetadata, formatDuration, formatTranscriptStep } from "../../lib/video-metadata";
 import { renderSummary } from "./render";
-import type { ContentRequest, TranscriptReply } from "../messages";
+import type { ContentRequest, TranscriptReply, PlayerResponseReply } from "../messages";
 
 const DEFAULT_MODEL = "claude-opus-4-7";
 const API_KEY_STORAGE = "anthropicApiKey";
@@ -16,6 +18,7 @@ const els = {
   testKey: document.getElementById("test-key") as HTMLButtonElement,
   keyStatus: document.getElementById("key-status") as HTMLSpanElement,
   status: document.getElementById("status") as HTMLParagraphElement,
+  videoMeta: document.getElementById("video-meta") as HTMLParagraphElement,
   output: document.getElementById("output") as HTMLElement,
 };
 
@@ -41,6 +44,14 @@ async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
   return tab;
 }
 
+async function fetchPlayerResponse(tabId: number): Promise<unknown> {
+  const request: ContentRequest = { type: "getPlayerResponse" };
+  const reply = (await chrome.tabs
+    .sendMessage(tabId, request)
+    .catch(() => undefined)) as PlayerResponseReply | undefined;
+  return reply?.playerResponse ?? null;
+}
+
 async function fetchTranscript(tabId: number): Promise<string> {
   const request: ContentRequest = { type: "getTranscript" };
   const reply = (await chrome.tabs
@@ -57,6 +68,8 @@ async function fetchTranscript(tabId: number): Promise<string> {
 
 async function run(): Promise<void> {
   els.output.replaceChildren();
+  els.videoMeta.textContent = "";
+  els.videoMeta.hidden = true;
 
   const apiKey = els.apiKey.value.trim();
   if (!apiKey) {
@@ -74,24 +87,44 @@ async function run(): Promise<void> {
 
   els.summarize.disabled = true;
   try {
+    setStatus("Reading video metadata…");
+    const playerResponse = await fetchPlayerResponse(tabId);
+    const meta = parseVideoMetadata(playerResponse);
+    if (meta) {
+      els.videoMeta.textContent = `${meta.title} (${formatDuration(meta.durationSec)})`;
+      els.videoMeta.hidden = false;
+    }
+
+    const description = (playerResponse as any)?.videoDetails?.shortDescription as
+      | string
+      | undefined;
+    const chapters = extractChapters(playerResponse, description);
+
     setStatus("Fetching transcript…");
     const json3 = await fetchTranscript(tabId);
     const transcript = normalizeJson3(json3);
+    const lastSec = transcript.length > 0 ? transcript[transcript.length - 1].sec : 0;
+    setStatus(formatTranscriptStep(lastSec, transcript.length));
 
     setStatus(`Summarizing with ${DEFAULT_MODEL}…`);
     const summary: Summary = await summarize({
       transcript,
+      chapters,
       model: DEFAULT_MODEL,
       apiKey,
     });
 
-    setStatus(`${summary.sections.length} sections · ${summary.language}`);
+    setStatus("Validating timestamps…");
+    // Yield to let the browser paint the status before building the summary DOM.
+    await new Promise<void>((r) => setTimeout(r, 0));
+
     els.output.append(
       renderSummary(summary, (sec) => {
         const seek: ContentRequest = { type: "seek", sec };
         void chrome.tabs.sendMessage(tabId, seek).catch(() => undefined);
       }),
     );
+    setStatus(`${summary.sections.length} sections · ${summary.language}`);
   } catch (err) {
     setStatus(err instanceof Error ? err.message : "Something went wrong.", true);
   } finally {

@@ -13,6 +13,12 @@ Rules:
 - **Sections:** Break the video into content-driven sections. A section covers one
   coherent topic. Soft target is 3–8 minutes of content per section, but a real topical
   break always wins over hitting a length target.
+  - If a "Video chapters" list is provided, use those chapters as section anchors. Keep a
+    chapter as one section when it is focused and under ~8 minutes. Split an over-long or
+    multi-topic chapter into sub-sections, choosing split points from real topical shifts
+    in the transcript. Never merge two chapters into one section.
+  - If no chapter list is provided, choose section boundaries entirely from topic shifts
+    in the transcript. Do not impose equal-length splits.
 - **Timestamps:** Every section's `sec` MUST be the start time of a real transcript
   segment — copy the exact number from one of the `[n]` prefixes. Never invent or round
   a timestamp.

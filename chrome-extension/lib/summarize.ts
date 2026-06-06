@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import schema from "../../shared/schema.json";
 import promptText from "../../shared/prompt.md?raw";
 import type { TranscriptSegment } from "./transcript";
+import type { Chapter } from "./chapters";
 
 /** One section of the generated summary. */
 export interface Section {
@@ -28,6 +29,8 @@ export interface AnthropicLike {
 export interface SummarizeInput {
   /** Normalized transcript segments — see `normalizeJson3`. */
   transcript: TranscriptSegment[];
+  /** Creator-defined chapter markers, if any — see `extractChapters`. */
+  chapters?: Chapter[] | null;
   model: string;
   apiKey: string;
 }
@@ -56,15 +59,24 @@ export async function summarize(
     system: promptText,
     tools: [schema],
     tool_choice: { type: "tool", name: "submit_summary" },
-    messages: [{ role: "user", content: renderTranscript(input.transcript) }],
+    messages: [{ role: "user", content: renderUserMessage(input) }],
   });
 
-  return parseSummary(message.content);
+  const summary = parseSummary(message.content);
+  return snapTimestamps(summary, input.transcript.map((s) => s.sec));
 }
 
-function renderTranscript(segments: TranscriptSegment[]): string {
-  const body = segments.map((s) => `[${s.sec}] ${s.text}`).join("\n");
-  return `Summarize this video transcript:\n\n${body}`;
+function renderUserMessage(input: SummarizeInput): string {
+  let message = "";
+
+  if (input.chapters && input.chapters.length > 0) {
+    const list = input.chapters.map((ch) => `[${ch.sec}] ${ch.title}`).join("\n");
+    message += `Video chapters:\n\n${list}\n\n`;
+  }
+
+  const body = input.transcript.map((s) => `[${s.sec}] ${s.text}`).join("\n");
+  message += `Summarize this video transcript:\n\n${body}`;
+  return message;
 }
 
 function parseSummary(content: unknown[]): Summary {
@@ -106,6 +118,26 @@ function validateSummary(input: unknown): Summary {
     }
   }
   return value as Summary;
+}
+
+export function snapTimestamps(summary: Summary, realSegmentStarts: number[]): Summary {
+  const sorted = [...realSegmentStarts].sort((a, b) => a - b);
+  return {
+    ...summary,
+    sections: summary.sections.map((section) => {
+      const snapped = findFloor(sorted, section.sec) ?? sorted[0];
+      return snapped === section.sec ? section : { ...section, sec: snapped };
+    }),
+  };
+}
+
+function findFloor(sorted: number[], target: number): number | undefined {
+  let result: number | undefined;
+  for (const val of sorted) {
+    if (val <= target) result = val;
+    else break;
+  }
+  return result;
 }
 
 function defaultCreateAnthropic(apiKey: string): AnthropicLike {

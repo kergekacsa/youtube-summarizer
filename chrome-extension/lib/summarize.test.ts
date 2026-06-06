@@ -1,6 +1,39 @@
 import { describe, it, expect } from "vitest";
-import { summarize } from "./summarize";
+import { summarize, snapTimestamps } from "./summarize";
+import type { Summary } from "./summarize";
 import type { TranscriptSegment } from "./transcript";
+import type { Chapter } from "./chapters";
+
+const REAL_STARTS = [0, 5, 10, 15];
+
+describe("snapTimestamps", () => {
+  it("snaps a fabricated sec to the nearest real segment ≤ it", () => {
+    const summary: Summary = {
+      language: "en",
+      sections: [{ sec: 7, title: "T", summary: "S." }],
+    };
+    const snapped = snapTimestamps(summary, REAL_STARTS);
+    expect(snapped.sections[0].sec).toBe(5);
+  });
+
+  it("leaves a sec that already matches a real segment unchanged", () => {
+    const summary: Summary = {
+      language: "en",
+      sections: [{ sec: 10, title: "T", summary: "S." }],
+    };
+    const snapped = snapTimestamps(summary, REAL_STARTS);
+    expect(snapped.sections[0].sec).toBe(10);
+  });
+
+  it("clamps to the first segment when sec is before all real starts", () => {
+    const summary: Summary = {
+      language: "en",
+      sections: [{ sec: 0, title: "T", summary: "S." }],
+    };
+    const snapped = snapTimestamps(summary, [3, 6, 9]);
+    expect(snapped.sections[0].sec).toBe(3);
+  });
+});
 
 const TRANSCRIPT: TranscriptSegment[] = [
   { sec: 0, text: "Hello world" },
@@ -49,6 +82,101 @@ describe("summarize", () => {
     const userText = JSON.stringify(captured.messages);
     expect(userText).toContain("[0] Hello world");
     expect(userText).toContain("[3] this is the second line");
+  });
+
+  it("applies timestamp snapping after Claude's response", async () => {
+    const summaryInput = {
+      language: "en",
+      sections: [{ sec: 7, title: "Intro", summary: "Two sentences. Here." }],
+    };
+    const createAnthropic = () => ({
+      messages: {
+        create: async () => ({
+          content: [{ type: "tool_use", name: "submit_summary", input: summaryInput }],
+        }),
+      },
+    });
+
+    const result = await summarize(
+      {
+        transcript: [{ sec: 0, text: "start" }, { sec: 5, text: "next" }],
+        model: "claude-opus-4-7",
+        apiKey: "sk-test-key",
+      },
+      { createAnthropic },
+    );
+
+    expect(result.sections[0].sec).toBe(5);
+  });
+
+  it("includes the chapter list in the user message when chapters are provided", async () => {
+    let captured: any;
+    const createAnthropic = () => ({
+      messages: {
+        create: async (body: any) => {
+          captured = body;
+          return {
+            content: [
+              {
+                type: "tool_use",
+                name: "submit_summary",
+                input: {
+                  language: "en",
+                  sections: [{ sec: 0, title: "T", summary: "S." }],
+                },
+              },
+            ],
+          };
+        },
+      },
+    });
+
+    const chapters: Chapter[] = [
+      { sec: 0, title: "Intro" },
+      { sec: 30, title: "Deep Dive" },
+    ];
+
+    await summarize(
+      { transcript: TRANSCRIPT, chapters, model: "claude-opus-4-7", apiKey: "key" },
+      { createAnthropic },
+    );
+
+    const userText = JSON.stringify(captured.messages);
+    expect(userText).toContain("[0] Intro");
+    expect(userText).toContain("[30] Deep Dive");
+    // Transcript is still included.
+    expect(userText).toContain("[0] Hello world");
+  });
+
+  it("omits the chapter preamble when chapters is null", async () => {
+    let captured: any;
+    const createAnthropic = () => ({
+      messages: {
+        create: async (body: any) => {
+          captured = body;
+          return {
+            content: [
+              {
+                type: "tool_use",
+                name: "submit_summary",
+                input: {
+                  language: "en",
+                  sections: [{ sec: 0, title: "T", summary: "S." }],
+                },
+              },
+            ],
+          };
+        },
+      },
+    });
+
+    await summarize(
+      { transcript: TRANSCRIPT, chapters: null, model: "claude-opus-4-7", apiKey: "key" },
+      { createAnthropic },
+    );
+
+    const userText = JSON.stringify(captured.messages);
+    expect(userText).not.toContain("chapters");
   });
 
   it("throws when Claude returns no submit_summary tool call", async () => {
