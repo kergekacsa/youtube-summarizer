@@ -28,9 +28,23 @@ Call `mcp__nimbalyst-mcp__tracker_get` with the item ID (e.g. `bug_01HX…`, `ts
 ## When a skill says "comment on / update an issue"
 
 - Add a comment: `mcp__nimbalyst-mcp__tracker_add_comment`
-- Update fields (status, priority, tags, owner): `mcp__nimbalyst-mcp__tracker_update`
+- Update fields (status, priority, tags, owner, title, description): `mcp__nimbalyst-mcp__tracker_update`
 - Link a file to the item: `mcp__nimbalyst-mcp__tracker_link_file`
 - Link the current agent session to the item: `mcp__nimbalyst-mcp__tracker_link_session`
+
+Then — per the reminder below — actually move the issue's `status` and tick its checkboxes; a comment alone leaves the issue looking untouched.
+
+## ⚠️ Don't forget to update the issue again!
+
+When you finish work, **a comment is not an update.** Three *different* systems are in play and it's easy to think you've updated the tracker when you haven't:
+
+1. **`tracker_add_comment`** appends a comment. It does **not** change `status` and does **not** tick the acceptance-criteria checkboxes in the body — the issue header looks unchanged.
+2. **`tracker_update`** is what actually moves the issue:
+   - **Change `status`** — `in-progress` when you start, `in-review` when the code is done and awaiting verification. **Never set `done` without explicit user approval.**
+   - **Tick acceptance-criteria checkboxes.** There is no per-checkbox toggle: `description` *replaces* the whole body, so re-send the full description identical except `[ ]` → `[x]` on the genuinely-verified items. Don't over-claim — leave boxes that still need a manual/human step unchecked.
+3. **`mcp__nimbalyst-session-naming__update_session_meta`** updates **this chat's card on the kanban board** (name, tags, phase) — the *session*, **not** the tracker issue. It changes nothing on the issue.
+
+Closing ritual for any issue you worked: **(a)** comment what you did, **(b)** `tracker_update` the `status`, **(c)** `tracker_update` the `description` to tick the verified boxes.
 
 ## Triage workflow
 
