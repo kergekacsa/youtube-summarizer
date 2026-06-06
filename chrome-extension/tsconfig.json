@@ -10,7 +10,7 @@
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals", "chrome"]
   },
-  "include": ["lib", "env.d.ts", "../shared"]
+  "include": ["lib", "src", "env.d.ts", "../shared"]
 }

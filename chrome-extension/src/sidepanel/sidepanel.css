@@ -1,0 +1,93 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bar h1 {
+  font-size: 16px;
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #cc0000;
+  color: #fff;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.key-row {
+  margin: 10px 0;
+}
+
+.key-row input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 6px 8px;
+  font: inherit;
+}
+
+.status {
+  min-height: 1.2em;
+  color: #888;
+  margin: 8px 0;
+}
+
+.status.error {
+  color: #cc0000;
+}
+
+.section {
+  padding: 10px 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+}
+
+.section-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.timestamp {
+  font-variant-numeric: tabular-nums;
+  color: #3ea6ff;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.timestamp:hover {
+  text-decoration: underline;
+}
+
+.section-title {
+  font-weight: 600;
+}
+
+.section-summary {
+  margin: 4px 0 0;
+}

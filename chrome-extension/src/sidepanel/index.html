@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouTube Summarizer</title>
+    <link rel="stylesheet" href="./sidepanel.css" />
+  </head>
+  <body>
+    <main id="app">
+      <header class="bar">
+        <h1>Summarize</h1>
+        <button id="summarize" type="button">Summarize this video</button>
+      </header>
+
+      <details id="key-row" class="key-row">
+        <summary>API key</summary>
+        <input
+          id="api-key"
+          type="password"
+          placeholder="sk-ant-…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </details>
+
+      <p id="status" class="status" role="status"></p>
+      <section id="output" class="output"></section>
+    </main>
+    <script type="module" src="./sidepanel.ts"></script>
+  </body>
+</html>
