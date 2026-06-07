@@ -151,6 +151,20 @@ private let interceptorJS = """
     }
     document.addEventListener('yt-navigate-finish', tryPR);
 
+    // --- Auto-accept cookie consent (GDPR dialog blocks player load) ---
+    function acceptConsent() {
+        var btn = document.querySelector('button[aria-label="Accept all"]') ||
+                  document.querySelector('button[aria-label="Alle akzeptieren"]') ||
+                  document.querySelector('button[aria-label="Alles accepteren"]') ||
+                  document.querySelector('.yt-spec-button-shape-next--call-to-action');
+        if (btn) { btn.click(); return true; }
+        return false;
+    }
+    if (!acceptConsent()) {
+        var consentObserver = new MutationObserver(function () { if (acceptConsent()) consentObserver.disconnect(); });
+        consentObserver.observe(document.documentElement, { childList: true, subtree: true });
+    }
+
     // --- Trigger CC button (mirrors main-world.ts) ---
     function triggerCaptions() {
         var btn = document.querySelector('.ytp-subtitles-button');
