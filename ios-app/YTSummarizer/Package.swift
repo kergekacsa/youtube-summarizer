@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "YTSummarizer",
-    platforms: [.iOS(.v17)],
+    platforms: [.iOS(.v17), .macCatalyst(.v15)],
     targets: [
         // Pure business logic — no UIKit, no @main. Tested via YTSummarizerCoreTests.
         .target(
