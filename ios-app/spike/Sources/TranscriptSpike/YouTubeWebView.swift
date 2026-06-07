@@ -10,6 +10,9 @@ struct YouTubeWebView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
+        // Allow autoplay — without this macOS WKWebView requires a user gesture
+        // and the video stays paused, so YouTube never forwards the pot token.
+        config.mediaTypesRequiringUserActionForPlayback = []
         let uc = config.userContentController
 
         uc.add(context.coordinator, name: "spikeLog")
@@ -257,6 +260,13 @@ private let interceptorJS = """
         if (didCapture) return;
         triggerViaCCButton() || triggerViaPlayerAPI() || triggerViaSettingsMenu();
     }
+
+    // Auto-play: YouTube only forwards the pot token once playback starts.
+    function tryPlay() {
+        var btn = document.querySelector('.ytp-play-button');
+        if (btn && /play/i.test(btn.getAttribute('aria-label') || '')) btn.click();
+    }
+    setTimeout(tryPlay, 1500);
 
     // Watch for CC button to appear, trigger once, then stop observing.
     var ccObserver = new MutationObserver(function () {
