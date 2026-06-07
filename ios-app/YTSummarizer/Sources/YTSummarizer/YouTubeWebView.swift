@@ -1,0 +1,172 @@
+import SwiftUI
+import WebKit
+import YTSummarizerCore
+
+/// Hidden WKWebView that loads a YouTube page, injects the JS interceptor at
+/// document_start, and calls `onResult` when the timedtext response is captured.
+///
+/// Must remain in the view hierarchy (even with opacity 0) for the YouTube
+/// player to initialise and issue its CC fetch.
+struct YouTubeWebView: UIViewRepresentable {
+    let urlString: String
+    let onResult: (Result<[TranscriptSegment], Error>) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onResult: onResult) }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        let uc = config.userContentController
+        uc.add(context.coordinator, name: "transcriptCapture")
+
+        // Injected at document_start — same timing as Chrome's MAIN-world content script.
+        let script = WKUserScript(
+            source: interceptorJS,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        uc.addUserScript(script)
+
+        let wv = WKWebView(frame: .zero, configuration: config)
+        wv.navigationDelegate = context.coordinator
+        if let url = URL(string: urlString) {
+            wv.load(URLRequest(url: url))
+        }
+        return wv
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+
+    // MARK: - Coordinator
+
+    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
+        let onResult: (Result<[TranscriptSegment], Error>) -> Void
+        private var didCapture = false
+
+        init(onResult: @escaping (Result<[TranscriptSegment], Error>) -> Void) {
+            self.onResult = onResult
+        }
+
+        func userContentController(
+            _ userContentController: WKUserContentController,
+            didReceive message: WKScriptMessage
+        ) {
+            DispatchQueue.main.async { self.handle(message) }
+        }
+
+        private func handle(_ message: WKScriptMessage) {
+            guard message.name == "transcriptCapture", !didCapture else { return }
+            guard let d = message.body as? [String: Any],
+                  let body = d["body"] as? String, !body.isEmpty else { return }
+            didCapture = true
+            do {
+                onResult(.success(try normalizeJson3(body)))
+            } catch {
+                onResult(.failure(error))
+            }
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            if !didCapture { onResult(.failure(error)) }
+        }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            if !didCapture { onResult(.failure(error)) }
+        }
+    }
+}
+
+// MARK: - Interceptor JS
+// Mirrors chrome-extension/src/content/main-world.ts.
+// Posts full json3 body (not just a preview) so the coordinator can normalise it.
+private let interceptorJS = """
+(function () {
+    'use strict';
+
+    var TIMEDTEXT = '/api/timedtext';
+
+    function emitCapture(payload) {
+        try { window.webkit.messageHandlers.transcriptCapture.postMessage(payload); }
+        catch (e) {}
+    }
+
+    // --- Patch fetch ---
+    var _fetch = window.fetch;
+    window.fetch = function patchedFetch(input, init) {
+        var url = (typeof input === 'string') ? input
+                : (input instanceof URL)      ? input.href
+                : (input && input.url != null) ? input.url : '';
+        var p = _fetch.apply(this, arguments);
+        if (url.includes(TIMEDTEXT)) {
+            p.then(function (res) {
+                return res.clone().text();
+            }).then(function (body) {
+                emitCapture({ method: 'fetch', url: url, bytes: body.length, body: body });
+            }).catch(function () {});
+        }
+        return p;
+    };
+
+    // --- Patch XHR ---
+    var _open = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (method, url) {
+        this.__ytsUrl = String(url);
+        return _open.apply(this, arguments);
+    };
+
+    var _send = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function () {
+        var url = this.__ytsUrl || '';
+        if (url.includes(TIMEDTEXT)) {
+            this.addEventListener('load', function () {
+                var text = this.responseText || '';
+                emitCapture({ method: 'xhr', url: url, bytes: text.length, body: text });
+            });
+        }
+        return _send.apply(this, arguments);
+    };
+
+    // --- Read ytInitialPlayerResponse ---
+    function tryPR() {
+        var pr = window.ytInitialPlayerResponse;
+        if (pr && pr.videoDetails) {
+            try {
+                window.webkit.messageHandlers.playerResponse.postMessage({
+                    found: true,
+                    title: pr.videoDetails.title || '',
+                    videoId: pr.videoDetails.videoId || ''
+                });
+            } catch (e) {}
+            return true;
+        }
+        return false;
+    }
+    if (!tryPR()) {
+        var ticks = 0;
+        var prTimer = setInterval(function () {
+            if (tryPR() || ++ticks > 30) clearInterval(prTimer);
+        }, 300);
+    }
+    document.addEventListener('yt-navigate-finish', tryPR);
+
+    // --- Trigger CC button (mirrors main-world.ts) ---
+    function triggerCaptions() {
+        var btn = document.querySelector('.ytp-subtitles-button');
+        if (btn && btn.getAttribute('aria-disabled') !== 'true') {
+            if (btn.getAttribute('aria-pressed') === 'true') {
+                btn.click();
+                setTimeout(function () { btn.click(); }, 400);
+            } else {
+                btn.click();
+            }
+            return true;
+        }
+        return false;
+    }
+    setTimeout(function () {
+        if (!triggerCaptions()) {
+            setTimeout(triggerCaptions, 4000);
+        }
+    }, 3000);
+
+})();
+"""

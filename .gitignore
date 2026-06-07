@@ -2,3 +2,10 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Swift / Xcode build artifacts
+ios-app/**/.build/
+ios-app/**/Package.resolved
+ios-app/**/.swiftpm/
+ios-app/**/*.xcodeproj/xcuserdata/
+ios-app/**/*.xcodeproj/project.xcworkspace/xcuserdata/
