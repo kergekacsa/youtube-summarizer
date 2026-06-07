@@ -15,6 +15,10 @@ struct YouTubeWebView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
+        // Allow autoplay — WKWebView blocks media by default requiring a user gesture.
+        // Without this the YouTube player stays paused and never fetches captions.
+        config.mediaTypesRequiringUserActionForPlayback = []
+        config.allowsInlineMediaPlayback = true
         let uc = config.userContentController
         uc.add(context.coordinator, name: "transcriptCapture")
 
