@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "YTSummarizer",
-    platforms: [.iOS(.v17), .macCatalyst(.v15)],
+    platforms: [.iOS(.v17), .macCatalyst(.v15), .macOS(.v14)],
     products: [
         // YTSummarizerCore is the only importable product.
         // The iOS app UI lives in Sources/YTSummarizer/ and is compiled

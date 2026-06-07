@@ -4,8 +4,9 @@ import WebKit
 struct YouTubeWebView: NSViewRepresentable {
     let videoURL: String
     let onLog: (LogEntry) -> Void
+    var onTranscript: ((String) -> Void)? = nil
 
-    func makeCoordinator() -> Coordinator { Coordinator(onLog: onLog) }
+    func makeCoordinator() -> Coordinator { Coordinator(onLog: onLog, onTranscript: onTranscript) }
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -37,9 +38,11 @@ struct YouTubeWebView: NSViewRepresentable {
 
     final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let onLog: (LogEntry) -> Void
+        let onTranscript: ((String) -> Void)?
 
-        init(onLog: @escaping (LogEntry) -> Void) {
+        init(onLog: @escaping (LogEntry) -> Void, onTranscript: ((String) -> Void)?) {
             self.onLog = onLog
+            self.onTranscript = onTranscript
         }
 
         func userContentController(
@@ -60,23 +63,21 @@ struct YouTubeWebView: NSViewRepresentable {
                       d["found"] as? Bool == true else { return }
                 let title = d["title"] as? String ?? "?"
                 let vid   = d["videoId"] as? String ?? "?"
-                log(.success, "ytInitialPlayerResponse found — \"\(title)\" (videoId: \(vid))")
+                log(.success, "ytInitialPlayerResponse — \"\(title)\" (videoId: \(vid))")
 
             case "transcriptCapture":
                 guard let d = message.body as? [String: Any] else { return }
-                let method  = (d["method"]  as? String ?? "?").uppercased()
-                let bytes   = d["bytes"]    as? Int    ?? 0
-                let url     = d["url"]      as? String ?? ""
-                let preview = d["preview"]  as? String ?? ""
+                let method = (d["method"] as? String ?? "?").uppercased()
+                let bytes  = d["bytes"]  as? Int    ?? 0
+                let url    = d["url"]    as? String ?? ""
+                let body   = d["body"]   as? String ?? ""
 
                 if bytes == 0 {
-                    log(.failure, "[\(method)] timedtext captured but 0 bytes — pot token NOT forwarded")
-                    log(.warning, "Approach A FAILS. Next: implement Approach B (WKWebsiteDataStore.proxyConfigurations)")
-                    log(.info, "URL: \(url.prefix(160))")
+                    log(.failure, "[\(method)] 0 bytes — pot token not forwarded")
                 } else {
-                    log(.success, "[\(method)] \(bytes) bytes received — APPROACH A WORKS ✓")
-                    log(.info, "URL: \(url.prefix(160))")
-                    log(.info, "Data preview: \(preview.prefix(120))")
+                    log(.success, "[\(method)] \(bytes) bytes — Approach A ✓")
+                    log(.info, "URL: \(url.prefix(120))")
+                    onTranscript?(body)
                 }
 
             default:
@@ -86,7 +87,7 @@ struct YouTubeWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             DispatchQueue.main.async {
-                self.log(.info, "Page loaded — waiting for YouTube player to initialise…")
+                self.log(.info, "Page loaded — waiting for player…")
             }
         }
 
@@ -105,14 +106,13 @@ struct YouTubeWebView: NSViewRepresentable {
 }
 
 // Mirrors chrome-extension/src/content/main-world.ts
-// Patches window.fetch and XMLHttpRequest to intercept /api/timedtext requests,
-// reads ytInitialPlayerResponse, and triggers the CC button to make the player
-// issue its own authorized (pot-bearing) caption fetch.
+// Posts FULL body (not a preview) so the coordinator can normalise it.
 private let interceptorJS = """
 (function () {
     'use strict';
 
     var TIMEDTEXT = '/api/timedtext';
+    var didCapture = false;
 
     function spikeLog(msg) {
         try { window.webkit.messageHandlers.spikeLog.postMessage(String(msg)); }
@@ -120,13 +120,15 @@ private let interceptorJS = """
     }
 
     function emitCapture(payload) {
+        if (didCapture) return;
+        didCapture = true;
         try { window.webkit.messageHandlers.transcriptCapture.postMessage(payload); }
         catch (e) { spikeLog('emitCapture error: ' + e); }
     }
 
     spikeLog('Interceptor installed at document_start');
 
-    // --- Patch fetch ---------------------------------------------------------
+    // --- Patch fetch ---
     var _fetch = window.fetch;
     window.fetch = function patchedFetch(input, init) {
         var url = (typeof input === 'string') ? input
@@ -134,11 +136,11 @@ private let interceptorJS = """
                 : (input && input.url != null) ? input.url : '';
         var p = _fetch.apply(this, arguments);
         if (url.includes(TIMEDTEXT)) {
-            spikeLog('fetch intercepted — URL length: ' + url.length);
+            spikeLog('fetch intercepted');
             p.then(function (res) {
                 return res.clone().text();
             }).then(function (body) {
-                emitCapture({ method: 'fetch', url: url, bytes: body.length, preview: body.slice(0, 400) });
+                emitCapture({ method: 'fetch', url: url, bytes: body.length, body: body });
             }).catch(function (e) {
                 spikeLog('fetch clone error: ' + e);
             });
@@ -146,7 +148,7 @@ private let interceptorJS = """
         return p;
     };
 
-    // --- Patch XHR -----------------------------------------------------------
+    // --- Patch XHR ---
     var _open = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function (method, url) {
         this.__spikeUrl = String(url);
@@ -154,21 +156,21 @@ private let interceptorJS = """
     };
 
     var _send = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.send = function (body) {
+    XMLHttpRequest.prototype.send = function () {
         var url = this.__spikeUrl || '';
         if (url.includes(TIMEDTEXT)) {
-            spikeLog('XHR intercepted — URL length: ' + url.length);
+            spikeLog('XHR intercepted');
             this.addEventListener('load', function () {
                 var text = this.responseText || '';
-                emitCapture({ method: 'xhr', url: url, bytes: text.length, preview: text.slice(0, 400) });
+                emitCapture({ method: 'xhr', url: url, bytes: text.length, body: text });
             });
         }
         return _send.apply(this, arguments);
     };
 
-    spikeLog('fetch and XHR patched OK');
+    spikeLog('fetch and XHR patched');
 
-    // --- Read ytInitialPlayerResponse ----------------------------------------
+    // --- Read ytInitialPlayerResponse ---
     function tryPR() {
         var pr = window.ytInitialPlayerResponse;
         if (pr && pr.videoDetails) {
@@ -178,12 +180,11 @@ private let interceptorJS = """
                     title: pr.videoDetails.title || '',
                     videoId: pr.videoDetails.videoId || ''
                 });
-            } catch (e) { spikeLog('playerResponse post error: ' + e); }
+            } catch (e) {}
             return true;
         }
         return false;
     }
-
     if (!tryPR()) {
         var ticks = 0;
         var prTimer = setInterval(function () {
@@ -192,15 +193,12 @@ private let interceptorJS = """
     }
     document.addEventListener('yt-navigate-finish', tryPR);
 
-    // --- Trigger CC button (mirrors main-world.ts) ---------------------------
-    function ccButton() { return document.querySelector('.ytp-subtitles-button'); }
-
-    function triggerCaptions() {
-        var btn = ccButton();
+    // --- Trigger CC button ---
+    function triggerViaCCButton() {
+        var btn = document.querySelector('.ytp-subtitles-button');
         if (btn && btn.getAttribute('aria-disabled') !== 'true') {
             spikeLog('CC button found — aria-pressed=' + btn.getAttribute('aria-pressed'));
             if (btn.getAttribute('aria-pressed') === 'true') {
-                // Already on — toggle off then on to force a fresh fetch
                 btn.click();
                 setTimeout(function () { btn.click(); }, 400);
             } else {
@@ -208,19 +206,68 @@ private let interceptorJS = """
             }
             return true;
         }
-        spikeLog('CC button not found at trigger time');
         return false;
     }
 
-    setTimeout(function () {
-        spikeLog('3 s — attempting CC trigger');
-        if (!triggerCaptions()) {
-            setTimeout(function () {
-                spikeLog('7 s — retry CC trigger');
-                triggerCaptions();
-            }, 4000);
-        }
-    }, 3000);
+    function triggerViaPlayerAPI() {
+        var player = document.getElementById('movie_player');
+        if (!player || typeof player.getOption !== 'function') return false;
+        try {
+            var tracks = player.getOption('captions', 'tracklist') || [];
+            if (tracks.length > 0) {
+                player.setOption('captions', 'track', tracks[0]);
+                spikeLog('captions set via player API');
+                return true;
+            }
+        } catch (e) {}
+        return false;
+    }
+
+    function triggerViaSettingsMenu() {
+        var gear = document.querySelector('.ytp-settings-button');
+        if (!gear) return false;
+        gear.click();
+        setTimeout(function () {
+            var items = document.querySelectorAll('.ytp-menuitem');
+            var found = false;
+            for (var i = 0; i < items.length; i++) {
+                var label = items[i].querySelector('.ytp-menuitem-label');
+                if (label && /subtitle|caption/i.test(label.textContent)) {
+                    items[i].click();
+                    found = true;
+                    setTimeout(function () {
+                        var subItems = document.querySelectorAll('.ytp-menuitem');
+                        for (var j = 0; j < subItems.length; j++) {
+                            var sub = subItems[j].querySelector('.ytp-menuitem-label');
+                            if (sub && sub.textContent.trim() && !/^off$/i.test(sub.textContent.trim())) {
+                                subItems[j].click();
+                                break;
+                            }
+                        }
+                    }, 600);
+                    break;
+                }
+            }
+            if (!found) gear.click();
+        }, 600);
+        return true;
+    }
+
+    function tryTrigger() {
+        if (didCapture) return;
+        triggerViaCCButton() || triggerViaPlayerAPI() || triggerViaSettingsMenu();
+    }
+
+    var ccObserver = new MutationObserver(function () {
+        if (!didCapture && document.querySelector('.ytp-subtitles-button')) tryTrigger();
+    });
+    ccObserver.observe(document.documentElement, { childList: true, subtree: true });
+
+    var retries = 0;
+    var retryTimer = setInterval(function () {
+        if (didCapture || ++retries >= 20) { clearInterval(retryTimer); return; }
+        tryTrigger();
+    }, 2000);
 
 })();
 """
