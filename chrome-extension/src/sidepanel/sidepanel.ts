@@ -23,6 +23,8 @@ const els = {
   model: document.getElementById("model") as HTMLSelectElement,
   status: document.getElementById("status") as HTMLParagraphElement,
   videoMeta: document.getElementById("video-meta") as HTMLParagraphElement,
+  debugBlock: document.getElementById("debug-block") as HTMLDetailsElement,
+  debugPre: document.getElementById("debug-pre") as HTMLPreElement,
   output: document.getElementById("output") as HTMLElement,
   regenerate: document.getElementById("regenerate") as HTMLButtonElement,
 };
@@ -41,6 +43,16 @@ function applyKeyState(): void {
 function setStatus(text: string, isError = false): void {
   els.status.textContent = text;
   els.status.classList.toggle("error", isError);
+}
+
+function showDebug(data: unknown): void {
+  els.debugPre.textContent = JSON.stringify(data, null, 2);
+  els.debugBlock.hidden = false;
+}
+
+function clearDebug(): void {
+  els.debugBlock.hidden = true;
+  els.debugPre.textContent = "";
 }
 
 function setStatusWithRetry(text: string): void {
@@ -85,6 +97,7 @@ async function run(force = false): Promise<void> {
   els.videoMeta.textContent = "";
   els.videoMeta.hidden = true;
   els.regenerate.hidden = true;
+  clearDebug();
 
   const apiKey = els.apiKey.value.trim();
   if (!apiKey) {
@@ -124,6 +137,12 @@ async function run(force = false): Promise<void> {
   try {
     setStatus("Reading video metadata…");
     const playerResponse = await fetchPlayerResponse(tabId);
+
+    if (!playerResponse) {
+      showDebug({ error: "playerResponse is null — content script not ready or ytInitialPlayerResponse not yet available" });
+      throw new Error("Could not read video data. Reload the page and try again.");
+    }
+
     const meta = parseVideoMetadata(playerResponse);
     if (meta) {
       els.videoMeta.textContent = `${meta.title} (${formatDuration(meta.durationSec)})`;
@@ -136,6 +155,12 @@ async function run(force = false): Promise<void> {
     const chapters = extractChapters(playerResponse, description);
 
     if (!hasCaptions(playerResponse)) {
+      const pr = playerResponse as Record<string, unknown>;
+      showDebug({
+        topLevelKeys: Object.keys(pr),
+        captions: pr["captions"] ?? null,
+        videoId: (pr["videoDetails"] as any)?.videoId,
+      });
       throw new Error("This video has no captions available.");
     }
 

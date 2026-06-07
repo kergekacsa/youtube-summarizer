@@ -158,6 +158,32 @@ button:disabled {
   margin: 4px 0 0;
 }
 
+.debug-block {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: #888;
+}
+
+.debug-block summary {
+  cursor: pointer;
+  color: #cc0000;
+  font-size: 12px;
+  user-select: none;
+}
+
+.debug-pre {
+  margin: 6px 0 0;
+  padding: 8px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
 #regenerate {
   margin-top: 12px;
   background: transparent;
