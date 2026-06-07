@@ -165,7 +165,9 @@ private let interceptorJS = """
         consentObserver.observe(document.documentElement, { childList: true, subtree: true });
     }
 
-    // --- Trigger captions: three-stage fallback (mirrors main-world.ts) ---
+    // --- Trigger captions: three-stage fallback with retry ---
+
+    var captionsTriggered = false;
 
     // Stage 1: direct .ytp-subtitles-button in the player toolbar
     function triggerViaCCButton() {
@@ -182,67 +184,74 @@ private let interceptorJS = """
         return false;
     }
 
-    // Stage 2: YouTube player JS API (works when CC is in a submenu)
+    // Stage 2: YouTube player JS API — only succeeds if tracks are available
     function triggerViaPlayerAPI() {
         var player = document.getElementById('movie_player');
-        if (!player) return false;
+        if (!player || typeof player.getOption !== 'function') return false;
         try {
-            if (typeof player.getOption === 'function') {
-                var tracks = player.getOption('captions', 'tracklist') || [];
-                if (tracks.length > 0) {
-                    player.setOption('captions', 'track', tracks[0]);
-                    return true;
-                }
-            }
-            if (typeof player.loadModule === 'function') {
-                player.loadModule('captions');
+            var tracks = player.getOption('captions', 'tracklist') || [];
+            if (tracks.length > 0) {
+                player.setOption('captions', 'track', tracks[0]);
                 return true;
             }
         } catch (e) {}
         return false;
     }
 
-    // Stage 3: navigate the settings gear → Subtitles submenu
+    // Stage 3: navigate Settings gear → Subtitles submenu → first real track
     function triggerViaSettingsMenu() {
         var gear = document.querySelector('.ytp-settings-button');
         if (!gear) return false;
         gear.click();
         setTimeout(function () {
             var items = document.querySelectorAll('.ytp-menuitem');
+            var found = false;
             for (var i = 0; i < items.length; i++) {
                 var label = items[i].querySelector('.ytp-menuitem-label');
                 if (label && /subtitle|caption/i.test(label.textContent)) {
                     items[i].click();
+                    found = true;
                     setTimeout(function () {
-                        // Pick the first available track in the submenu
+                        // Skip "Off" — pick the first real language track
                         var subItems = document.querySelectorAll('.ytp-menuitem');
                         for (var j = 0; j < subItems.length; j++) {
                             var sub = subItems[j].querySelector('.ytp-menuitem-label');
-                            if (sub && sub.textContent.trim()) {
+                            if (sub && sub.textContent.trim() && !/^off$/i.test(sub.textContent.trim())) {
                                 subItems[j].click();
                                 break;
                             }
                         }
-                    }, 500);
-                    return;
+                    }, 600);
+                    break;
                 }
             }
-            gear.click(); // close menu — no subtitle option found
-        }, 500);
+            if (!found) gear.click(); // close menu — no subtitle option
+        }, 600);
         return true;
     }
 
-    function triggerCaptions() {
-        return triggerViaCCButton() ||
-               triggerViaPlayerAPI() ||
-               triggerViaSettingsMenu();
+    function tryTrigger() {
+        if (captionsTriggered) return;
+        captionsTriggered = triggerViaCCButton() ||
+                            triggerViaPlayerAPI() ||
+                            triggerViaSettingsMenu();
     }
 
-    setTimeout(function () {
-        if (!triggerCaptions()) {
-            setTimeout(triggerCaptions, 4000);
+    // React immediately when CC button appears in the DOM
+    var ccObserver = new MutationObserver(function () {
+        if (document.querySelector('.ytp-subtitles-button')) {
+            ccObserver.disconnect();
+            tryTrigger();
         }
-    }, 3000);
+    });
+    ccObserver.observe(document.documentElement, { childList: true, subtree: true });
+
+    // Also retry on a schedule for up to 30 s in case the observer misses it
+    var retries = 0;
+    var retryTimer = setInterval(function () {
+        tryTrigger();
+        if (captionsTriggered || ++retries >= 15) clearInterval(retryTimer);
+    }, 2000);
 
 })();
 """
