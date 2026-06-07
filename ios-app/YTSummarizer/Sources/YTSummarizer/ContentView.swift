@@ -20,9 +20,7 @@ struct ContentView: View {
                 // the YouTube player can initialise and issue its CC fetch.
                 if case .loading(let url) = state {
                     YouTubeWebView(urlString: url, onResult: handleWebViewResult)
-                        .frame(width: 1, height: 1)
-                        .opacity(0)
-                        .allowsHitTesting(false)
+                        .frame(height: 300)  // visible for debugging — hide once working
                 }
 
                 switch state {
@@ -108,6 +106,12 @@ struct ContentView: View {
     private func startSummarize() {
         let url = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
         state = .loading(url: url)
+        Task {
+            try? await Task.sleep(for: .seconds(30))
+            if case .loading = state {
+                state = .error("Timed out — check that the video has captions and the player loaded in the WebView above.")
+            }
+        }
     }
 
     private func handleWebViewResult(_ result: Result<[TranscriptSegment], Error>) {
