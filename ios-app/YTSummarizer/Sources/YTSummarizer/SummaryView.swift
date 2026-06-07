@@ -18,7 +18,7 @@ struct SummaryView: View {
 }
 
 private struct SectionCard: View {
-    let section: Section
+    let section: SummarySection
     let videoID: String
 
     private var timestampURL: URL? {

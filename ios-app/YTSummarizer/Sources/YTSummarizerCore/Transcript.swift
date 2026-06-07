@@ -5,7 +5,7 @@ import Foundation
 /// Mirrors `normalizeJson3` in `chrome-extension/lib/transcript.ts`.
 /// Input is the raw body captured by the JS interceptor via the player's own
 /// (pot-bearing) timedtext request — direct fetches return empty without the token.
-func normalizeJson3(_ raw: String) throws -> [TranscriptSegment] {
+public func normalizeJson3(_ raw: String) throws -> [TranscriptSegment] {
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
         throw TranscriptError.emptyResponse

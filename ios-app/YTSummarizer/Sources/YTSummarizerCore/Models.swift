@@ -1,26 +1,33 @@
 import Foundation
 
-struct TranscriptSegment: Equatable {
-    let sec: Int
-    let text: String
+public struct TranscriptSegment: Equatable {
+    public let sec: Int
+    public let text: String
+    public init(sec: Int, text: String) { self.sec = sec; self.text = text }
 }
 
-struct Section: Equatable {
-    let sec: Int
-    let title: String
-    let summary: String
+public struct SummarySection: Equatable {
+    public let sec: Int
+    public let title: String
+    public let summary: String
+    public init(sec: Int, title: String, summary: String) {
+        self.sec = sec; self.title = title; self.summary = summary
+    }
 }
 
-struct Summary: Equatable {
-    let language: String
-    let sections: [Section]
+public struct Summary: Equatable {
+    public let language: String
+    public let sections: [SummarySection]
+    public init(language: String, sections: [SummarySection]) {
+        self.language = language; self.sections = sections
+    }
 }
 
-enum TranscriptError: LocalizedError {
+public enum TranscriptError: LocalizedError {
     case emptyResponse
     case invalidJSON
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .emptyResponse:
             return "Caption track returned an empty response — the transcript may be unavailable for this video."
@@ -30,14 +37,14 @@ enum TranscriptError: LocalizedError {
     }
 }
 
-enum SummarizeError: LocalizedError {
+public enum SummarizeError: LocalizedError {
     case missingToolUse
     case missingLanguage
     case missingSections
     case malformedSection
     case apiError(String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .missingToolUse:   return "Claude did not call submit_summary"
         case .missingLanguage:  return "submit_summary: missing language"

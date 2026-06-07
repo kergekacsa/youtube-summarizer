@@ -6,25 +6,25 @@ final class SummarizeTests: XCTestCase {
     // MARK: - snapTimestamps
 
     func test_snap_leavesUnchangedWhenSecAlreadyMatches() {
-        let summary = Summary(language: "en", sections: [Section(sec: 10, title: "A", summary: "B")])
+        let summary = Summary(language: "en", sections: [SummarySummarySection(sec: 10, title: "A", summary: "B")])
         let result = snapTimestamps(summary: summary, realSegmentStarts: [5, 10, 20])
         XCTAssertEqual(result.sections[0].sec, 10)
     }
 
     func test_snap_snapsToGreatestRealSegmentBelowOrEqualToSec() {
-        let summary = Summary(language: "en", sections: [Section(sec: 15, title: "A", summary: "B")])
+        let summary = Summary(language: "en", sections: [SummarySection(sec: 15, title: "A", summary: "B")])
         let result = snapTimestamps(summary: summary, realSegmentStarts: [5, 10, 20])
         XCTAssertEqual(result.sections[0].sec, 10)
     }
 
     func test_snap_clampsToFirstSegmentWhenSecIsBeforeTranscript() {
-        let summary = Summary(language: "en", sections: [Section(sec: 2, title: "A", summary: "B")])
+        let summary = Summary(language: "en", sections: [SummarySection(sec: 2, title: "A", summary: "B")])
         let result = snapTimestamps(summary: summary, realSegmentStarts: [5, 10, 20])
         XCTAssertEqual(result.sections[0].sec, 5)
     }
 
     func test_snap_preservesLanguageTitleAndSummaryText() {
-        let summary = Summary(language: "hu", sections: [Section(sec: 12, title: "Fejezet", summary: "Szöveg")])
+        let summary = Summary(language: "hu", sections: [SummarySection(sec: 12, title: "Fejezet", summary: "Szöveg")])
         let result = snapTimestamps(summary: summary, realSegmentStarts: [5, 10, 20])
         XCTAssertEqual(result.language, "hu")
         XCTAssertEqual(result.sections[0].title, "Fejezet")

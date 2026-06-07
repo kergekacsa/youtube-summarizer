@@ -2,8 +2,8 @@ import Foundation
 
 // MARK: - Constants (API key replaced in NIM-14)
 
-let claudeAPIKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? ""
-let claudeModel  = "claude-sonnet-4-6"
+public let claudeAPIKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? ""
+public let claudeModel  = "claude-sonnet-4-6"
 
 // MARK: - Timestamp snapping
 
@@ -11,13 +11,13 @@ let claudeModel  = "claude-sonnet-4-6"
 /// Sections before the first segment are clamped to the first segment.
 ///
 /// Mirrors `snapTimestamps` in `chrome-extension/lib/summarize.ts`.
-func snapTimestamps(summary: Summary, realSegmentStarts: [Int]) -> Summary {
+public func snapTimestamps(summary: Summary, realSegmentStarts: [Int]) -> Summary {
     let sorted = realSegmentStarts.sorted()
     guard !sorted.isEmpty else { return summary }
-    let snappedSections = summary.sections.map { section -> Section in
+    let snappedSections = summary.sections.map { section -> SummarySection in
         let snapped = findFloor(sorted: sorted, target: section.sec) ?? sorted[0]
         guard snapped != section.sec else { return section }
-        return Section(sec: snapped, title: section.title, summary: section.summary)
+        return SummarySection(sec: snapped, title: section.title, summary: section.summary)
     }
     return Summary(language: summary.language, sections: snappedSections)
 }
@@ -33,7 +33,7 @@ private func findFloor(sorted: [Int], target: Int) -> Int? {
 // MARK: - Response parsing
 
 /// Extract and validate a `Summary` from a raw Anthropic Messages API response dictionary.
-func parseSummaryResponse(_ response: [String: Any]) throws -> Summary {
+public func parseSummaryResponse(_ response: [String: Any]) throws -> Summary {
     guard let content = response["content"] as? [[String: Any]],
           let toolUse = content.first(where: {
               $0["type"] as? String == "tool_use" &&
@@ -51,13 +51,13 @@ func parseSummaryResponse(_ response: [String: Any]) throws -> Summary {
         throw SummarizeError.missingSections
     }
 
-    let sections = try sectionsRaw.map { s -> Section in
+    let sections = try sectionsRaw.map { s -> SummarySection in
         guard let sec   = s["sec"]     as? Int,
               let title = s["title"]   as? String,
               let sum   = s["summary"] as? String else {
             throw SummarizeError.malformedSection
         }
-        return Section(sec: sec, title: title, summary: sum)
+        return SummarySection(sec: sec, title: title, summary: sum)
     }
 
     return Summary(language: language, sections: sections)
@@ -67,7 +67,7 @@ func parseSummaryResponse(_ response: [String: Any]) throws -> Summary {
 
 /// Call the Anthropic Messages API, force a `submit_summary` tool call,
 /// and return the snapped summary.
-func callClaude(transcript: [TranscriptSegment]) async throws -> Summary {
+public func callClaude(transcript: [TranscriptSegment]) async throws -> Summary {
     guard let promptURL = Bundle.module.url(forResource: "prompt", withExtension: "md"),
           let schemaURL = Bundle.module.url(forResource: "schema",  withExtension: "json") else {
         throw SummarizeError.apiError("prompt.md or schema.json not found in bundle")
