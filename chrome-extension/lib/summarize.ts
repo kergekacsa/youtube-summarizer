@@ -125,6 +125,7 @@ export function snapTimestamps(summary: Summary, realSegmentStarts: number[]): S
   return {
     ...summary,
     sections: summary.sections.map((section) => {
+      // No segment ≤ sec (fabricated timestamp before the transcript starts): clamp to first.
       const snapped = findFloor(sorted, section.sec) ?? sorted[0];
       return snapped === section.sec ? section : { ...section, sec: snapped };
     }),
