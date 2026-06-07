@@ -28,6 +28,9 @@ struct YouTubeWebView: UIViewRepresentable {
 
         let wv = WKWebView(frame: .zero, configuration: config)
         wv.navigationDelegate = context.coordinator
+        // Force desktop UA so YouTube serves the standard player with CC button.
+        // The mobile site uses a different layout without .ytp-subtitles-button.
+        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
         if let url = URL(string: urlString) {
             wv.load(URLRequest(url: url))
         }
