@@ -165,8 +165,10 @@ private let interceptorJS = """
         consentObserver.observe(document.documentElement, { childList: true, subtree: true });
     }
 
-    // --- Trigger CC button (mirrors main-world.ts) ---
-    function triggerCaptions() {
+    // --- Trigger captions: three-stage fallback (mirrors main-world.ts) ---
+
+    // Stage 1: direct .ytp-subtitles-button in the player toolbar
+    function triggerViaCCButton() {
         var btn = document.querySelector('.ytp-subtitles-button');
         if (btn && btn.getAttribute('aria-disabled') !== 'true') {
             if (btn.getAttribute('aria-pressed') === 'true') {
@@ -179,6 +181,63 @@ private let interceptorJS = """
         }
         return false;
     }
+
+    // Stage 2: YouTube player JS API (works when CC is in a submenu)
+    function triggerViaPlayerAPI() {
+        var player = document.getElementById('movie_player');
+        if (!player) return false;
+        try {
+            if (typeof player.getOption === 'function') {
+                var tracks = player.getOption('captions', 'tracklist') || [];
+                if (tracks.length > 0) {
+                    player.setOption('captions', 'track', tracks[0]);
+                    return true;
+                }
+            }
+            if (typeof player.loadModule === 'function') {
+                player.loadModule('captions');
+                return true;
+            }
+        } catch (e) {}
+        return false;
+    }
+
+    // Stage 3: navigate the settings gear → Subtitles submenu
+    function triggerViaSettingsMenu() {
+        var gear = document.querySelector('.ytp-settings-button');
+        if (!gear) return false;
+        gear.click();
+        setTimeout(function () {
+            var items = document.querySelectorAll('.ytp-menuitem');
+            for (var i = 0; i < items.length; i++) {
+                var label = items[i].querySelector('.ytp-menuitem-label');
+                if (label && /subtitle|caption/i.test(label.textContent)) {
+                    items[i].click();
+                    setTimeout(function () {
+                        // Pick the first available track in the submenu
+                        var subItems = document.querySelectorAll('.ytp-menuitem');
+                        for (var j = 0; j < subItems.length; j++) {
+                            var sub = subItems[j].querySelector('.ytp-menuitem-label');
+                            if (sub && sub.textContent.trim()) {
+                                subItems[j].click();
+                                break;
+                            }
+                        }
+                    }, 500);
+                    return;
+                }
+            }
+            gear.click(); // close menu — no subtitle option found
+        }, 500);
+        return true;
+    }
+
+    function triggerCaptions() {
+        return triggerViaCCButton() ||
+               triggerViaPlayerAPI() ||
+               triggerViaSettingsMenu();
+    }
+
     setTimeout(function () {
         if (!triggerCaptions()) {
             setTimeout(triggerCaptions, 4000);
