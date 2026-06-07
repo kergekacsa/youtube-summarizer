@@ -86,8 +86,10 @@ private let interceptorJS = """
     'use strict';
 
     var TIMEDTEXT = '/api/timedtext';
+    var didCapture = false;
 
     function emitCapture(payload) {
+        didCapture = true;
         try { window.webkit.messageHandlers.transcriptCapture.postMessage(payload); }
         catch (e) {}
     }
@@ -166,10 +168,10 @@ private let interceptorJS = """
     }
 
     // --- Trigger captions: three-stage fallback with retry ---
+    // didCapture is set by emitCapture when a real timedtext body arrives —
+    // that is the only signal that stops the retry loop.
 
-    var captionsTriggered = false;
-
-    // Stage 1: direct .ytp-subtitles-button in the player toolbar
+    // Stage 1: direct .ytp-subtitles-button (disabled during ads — will retry)
     function triggerViaCCButton() {
         var btn = document.querySelector('.ytp-subtitles-button');
         if (btn && btn.getAttribute('aria-disabled') !== 'true') {
@@ -184,7 +186,7 @@ private let interceptorJS = """
         return false;
     }
 
-    // Stage 2: YouTube player JS API — only succeeds if tracks are available
+    // Stage 2: YouTube player JS API — only when tracks are available
     function triggerViaPlayerAPI() {
         var player = document.getElementById('movie_player');
         if (!player || typeof player.getOption !== 'function') return false;
@@ -198,7 +200,7 @@ private let interceptorJS = """
         return false;
     }
 
-    // Stage 3: navigate Settings gear → Subtitles submenu → first real track
+    // Stage 3: Settings gear → Subtitles submenu → first real track (skip "Off")
     function triggerViaSettingsMenu() {
         var gear = document.querySelector('.ytp-settings-button');
         if (!gear) return false;
@@ -212,7 +214,6 @@ private let interceptorJS = """
                     items[i].click();
                     found = true;
                     setTimeout(function () {
-                        // Skip "Off" — pick the first real language track
                         var subItems = document.querySelectorAll('.ytp-menuitem');
                         for (var j = 0; j < subItems.length; j++) {
                             var sub = subItems[j].querySelector('.ytp-menuitem-label');
@@ -225,32 +226,38 @@ private let interceptorJS = """
                     break;
                 }
             }
-            if (!found) gear.click(); // close menu — no subtitle option
+            if (!found) gear.click();
         }, 600);
         return true;
     }
 
-    function tryTrigger() {
-        if (captionsTriggered) return;
-        captionsTriggered = triggerViaCCButton() ||
-                            triggerViaPlayerAPI() ||
-                            triggerViaSettingsMenu();
+    // Auto-play: YouTube defers the timedtext fetch until playback starts.
+    function tryPlay() {
+        var btn = document.querySelector('.ytp-play-button');
+        if (btn && btn.getAttribute('aria-label') && /play/i.test(btn.getAttribute('aria-label'))) {
+            btn.click();
+        }
     }
 
-    // React immediately when CC button appears in the DOM
+    function tryTrigger() {
+        if (didCapture) return;
+        triggerViaCCButton() || triggerViaPlayerAPI() || triggerViaSettingsMenu();
+    }
+
+    // Try to start playback so YouTube initialises the caption track
+    setTimeout(tryPlay, 1500);
+
+    // React immediately whenever the CC button (re-)appears — covers ad → video transition
     var ccObserver = new MutationObserver(function () {
-        if (document.querySelector('.ytp-subtitles-button')) {
-            ccObserver.disconnect();
-            tryTrigger();
-        }
+        if (!didCapture && document.querySelector('.ytp-subtitles-button')) tryTrigger();
     });
     ccObserver.observe(document.documentElement, { childList: true, subtree: true });
 
-    // Also retry on a schedule for up to 30 s in case the observer misses it
+    // Retry every 2 s for up to 40 s; only didCapture stops the loop
     var retries = 0;
     var retryTimer = setInterval(function () {
+        if (didCapture || ++retries >= 20) { clearInterval(retryTimer); return; }
         tryTrigger();
-        if (captionsTriggered || ++retries >= 15) clearInterval(retryTimer);
     }, 2000);
 
 })();
