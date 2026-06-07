@@ -108,6 +108,22 @@ button:disabled {
   color: #cc0000;
 }
 
+.retry-btn {
+  padding: 2px 8px;
+  font-size: 12px;
+  background: transparent;
+  color: #cc0000;
+  border: 1px solid #cc0000;
+  border-radius: 4px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  background: #cc0000;
+  color: #fff;
+}
+
 .section {
   padding: 10px 0;
   border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
@@ -140,4 +156,18 @@ button:disabled {
 
 .section-summary {
   margin: 4px 0 0;
+}
+
+#regenerate {
+  margin-top: 12px;
+  background: transparent;
+  color: #888;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  font-size: 13px;
+  padding: 4px 10px;
+}
+
+#regenerate:hover {
+  color: inherit;
+  border-color: color-mix(in srgb, currentColor 60%, transparent);
 }

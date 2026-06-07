@@ -1,9 +1,12 @@
-import { summarize, type Summary } from "../../lib/summarize";
+import { summarizeWithRetry, type Summary } from "../../lib/summarize";
 import { validateApiKey, canSummarize, type ValidateResult } from "../../lib/validate-api-key";
 import { normalizeJson3 } from "../../lib/transcript";
 import { extractChapters } from "../../lib/chapters";
+import { hasCaptions } from "../../lib/captions";
+import { isWatchUrl } from "../../lib/watch-url";
 import { parseVideoMetadata, formatDuration, formatTranscriptStep } from "../../lib/video-metadata";
 import { loadSettings, saveSettings, MODELS, type StorageLike } from "../../lib/settings";
+import { getFromCache, saveToCache } from "../../lib/cache";
 import { renderSummary } from "./render";
 import type { ContentRequest, TranscriptReply, PlayerResponseReply } from "../messages";
 
@@ -21,6 +24,7 @@ const els = {
   status: document.getElementById("status") as HTMLParagraphElement,
   videoMeta: document.getElementById("video-meta") as HTMLParagraphElement,
   output: document.getElementById("output") as HTMLElement,
+  regenerate: document.getElementById("regenerate") as HTMLButtonElement,
 };
 
 function applyKeyState(): void {
@@ -39,8 +43,14 @@ function setStatus(text: string, isError = false): void {
   els.status.classList.toggle("error", isError);
 }
 
-function isWatchUrl(url: string | undefined): boolean {
-  return !!url && /^https?:\/\/www\.youtube\.com\/watch/.test(url);
+function setStatusWithRetry(text: string): void {
+  els.status.classList.add("error");
+  const msg = document.createTextNode(text + " ");
+  const btn = document.createElement("button");
+  btn.textContent = "Retry";
+  btn.className = "retry-btn";
+  btn.addEventListener("click", () => void run());
+  els.status.replaceChildren(msg, btn);
 }
 
 async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
@@ -70,10 +80,11 @@ async function fetchTranscript(tabId: number): Promise<string> {
   return reply.json3;
 }
 
-async function run(): Promise<void> {
+async function run(force = false): Promise<void> {
   els.output.replaceChildren();
   els.videoMeta.textContent = "";
   els.videoMeta.hidden = true;
+  els.regenerate.hidden = true;
 
   const apiKey = els.apiKey.value.trim();
   if (!apiKey) {
@@ -91,7 +102,25 @@ async function run(): Promise<void> {
   const videoId = new URL(tab.url!).searchParams.get("v") ?? "";
   const model = els.model.value;
 
+  if (!force) {
+    const cached = await getFromCache(videoId, model, "", storage);
+    if (cached) {
+      els.output.append(
+        renderSummary(cached.summary, videoId, (sec) => {
+          const seek: ContentRequest = { type: "seek", sec };
+          void chrome.tabs.sendMessage(tabId, seek).catch(() => undefined);
+        }),
+      );
+      setStatus(`${cached.summary.sections.length} sections · ${cached.summary.language}`);
+      els.regenerate.hidden = false;
+      applyKeyState();
+      return;
+    }
+  }
+
   els.summarize.disabled = true;
+  let runError: { message: string; retryable: boolean } | null = null;
+
   try {
     setStatus("Reading video metadata…");
     const playerResponse = await fetchPlayerResponse(tabId);
@@ -106,17 +135,29 @@ async function run(): Promise<void> {
       | undefined;
     const chapters = extractChapters(playerResponse, description);
 
+    if (!hasCaptions(playerResponse)) {
+      throw new Error("This video has no captions available.");
+    }
+
     setStatus("Fetching transcript…");
-    const json3 = await fetchTranscript(tabId);
+    let json3: string;
+    try {
+      json3 = await fetchTranscript(tabId);
+    } catch {
+      throw new Error("Cannot access this video's transcript.");
+    }
+
     const transcript = normalizeJson3(json3);
     const lastSec = transcript.length > 0 ? transcript[transcript.length - 1].sec : 0;
     setStatus(formatTranscriptStep(lastSec, transcript.length));
 
     setStatus(`Summarizing with ${model}…`);
-    const summary: Summary = await summarize({ transcript, chapters, model, apiKey });
+    const summary: Summary = await summarizeWithRetry({ transcript, chapters, model, apiKey });
 
     setStatus("Validating timestamps…");
     await new Promise<void>((r) => setTimeout(r, 0));
+
+    await saveToCache({ videoId, model, sectionPref: "", generatedAt: new Date().toISOString(), summary }, storage);
 
     els.output.append(
       renderSummary(summary, videoId, (sec) => {
@@ -125,10 +166,24 @@ async function run(): Promise<void> {
       }),
     );
     setStatus(`${summary.sections.length} sections · ${summary.language}`);
+    els.regenerate.hidden = false;
   } catch (err) {
-    setStatus(err instanceof Error ? err.message : "Something went wrong.", true);
+    const httpStatus = (err as any)?.status;
+    runError = {
+      message: err instanceof Error ? err.message : "Something went wrong.",
+      retryable: typeof httpStatus === "number" && httpStatus >= 500 && httpStatus < 600,
+    };
   } finally {
     applyKeyState();
+  }
+
+  // Display error after applyKeyState() so it isn't overwritten by the key-state clear.
+  if (runError) {
+    if (runError.retryable) {
+      setStatusWithRetry(runError.message);
+    } else {
+      setStatus(runError.message, true);
+    }
   }
 }
 
@@ -178,6 +233,7 @@ async function init(): Promise<void> {
   els.model.addEventListener("change", () => void persistSettings());
   els.testKey.addEventListener("click", () => void runTestKey());
   els.summarize.addEventListener("click", () => void run());
+  els.regenerate.addEventListener("click", () => void run(true));
 }
 
 void init();
