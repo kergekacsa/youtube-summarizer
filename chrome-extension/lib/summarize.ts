@@ -37,6 +37,8 @@ export interface SummarizeInput {
 
 export interface SummarizeDeps {
   createAnthropic?: (apiKey: string) => AnthropicLike;
+  /** Injected in tests to avoid real timers. Defaults to setTimeout-based sleep. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 const MAX_TOKENS = 4096;
@@ -139,6 +141,34 @@ function findFloor(sorted: number[], target: number): number | undefined {
     else break;
   }
   return result;
+}
+
+/**
+ * Like `summarize`, but retries exactly once after a 2-second delay when
+ * Anthropic returns a 429 (rate-limit). Any other error is rethrown immediately.
+ */
+export async function summarizeWithRetry(
+  input: SummarizeInput,
+  deps: SummarizeDeps = {},
+): Promise<Summary> {
+  const sleep = deps.sleep ?? defaultSleep;
+  try {
+    return await summarize(input, deps);
+  } catch (err) {
+    if (isHttpStatus(err, 429)) {
+      await sleep(2000);
+      return summarize(input, deps);
+    }
+    throw err;
+  }
+}
+
+function isHttpStatus(err: unknown, status: number): boolean {
+  return typeof (err as any)?.status === "number" && (err as any).status === status;
+}
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 function defaultCreateAnthropic(apiKey: string): AnthropicLike {
