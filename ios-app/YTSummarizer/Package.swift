@@ -4,18 +4,17 @@ import PackageDescription
 let package = Package(
     name: "YTSummarizer",
     platforms: [.iOS(.v17), .macCatalyst(.v15)],
+    products: [
+        // YTSummarizerCore is the only importable product.
+        // The iOS app UI lives in Sources/YTSummarizer/ and is compiled
+        // directly by the Xcode app target (not as a library target here).
+        .library(name: "YTSummarizerCore", targets: ["YTSummarizerCore"]),
+    ],
     targets: [
-        // Pure business logic — no UIKit, no @main. Tested via YTSummarizerCoreTests.
         .target(
             name: "YTSummarizerCore",
             path: "Sources/YTSummarizerCore",
             resources: [.process("Resources")]
-        ),
-        // iOS app — depends on Core, owns the UI layer and WebView.
-        .target(
-            name: "YTSummarizer",
-            dependencies: ["YTSummarizerCore"],
-            path: "Sources/YTSummarizer"
         ),
         .testTarget(
             name: "YTSummarizerCoreTests",
