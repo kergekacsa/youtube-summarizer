@@ -1,0 +1,19 @@
+{
+  "captions": {
+    "playerCaptionsTracklistRenderer": {
+      "captionTracks": [
+        {
+          "baseUrl": "https://example.test/api/timedtext?v=long999&lang=en",
+          "languageCode": "en",
+          "kind": "asr",
+          "name": { "simpleText": "English (auto-generated)" }
+        }
+      ]
+    }
+  },
+  "videoDetails": {
+    "videoId": "long999",
+    "title": "Deep Work Podcast - Episode 42",
+    "lengthSeconds": "5700"
+  }
+}

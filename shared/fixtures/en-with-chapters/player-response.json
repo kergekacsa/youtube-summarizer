@@ -1,0 +1,57 @@
+{
+  "captions": {
+    "playerCaptionsTracklistRenderer": {
+      "captionTracks": [
+        {
+          "baseUrl": "https://example.test/api/timedtext?v=xyz789&lang=en",
+          "languageCode": "en",
+          "kind": "asr",
+          "name": { "simpleText": "English (auto-generated)" }
+        }
+      ]
+    }
+  },
+  "videoDetails": {
+    "videoId": "xyz789",
+    "title": "JavaScript Performance Tips",
+    "lengthSeconds": "900"
+  },
+  "playerOverlays": {
+    "playerOverlayRenderer": {
+      "decoratedPlayerBarRenderer": {
+        "decoratedPlayerBarRenderer": {
+          "playerBar": {
+            "multiMarkersPlayerBarRenderer": {
+              "markersMap": [
+                {
+                  "value": {
+                    "chapters": [
+                      {
+                        "chapterRenderer": {
+                          "title": { "simpleText": "Introduction" },
+                          "timeRangeStartMillis": 0
+                        }
+                      },
+                      {
+                        "chapterRenderer": {
+                          "title": { "simpleText": "Identifying Bottlenecks" },
+                          "timeRangeStartMillis": 180000
+                        }
+                      },
+                      {
+                        "chapterRenderer": {
+                          "title": { "simpleText": "Practical Fixes" },
+                          "timeRangeStartMillis": 480000
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

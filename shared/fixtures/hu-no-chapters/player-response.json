@@ -1,0 +1,19 @@
+{
+  "captions": {
+    "playerCaptionsTracklistRenderer": {
+      "captionTracks": [
+        {
+          "baseUrl": "https://example.test/api/timedtext?v=hun456&lang=hu",
+          "languageCode": "hu",
+          "kind": "asr",
+          "name": { "simpleText": "Magyar (automatikusan generált)" }
+        }
+      ]
+    }
+  },
+  "videoDetails": {
+    "videoId": "hun456",
+    "title": "AI az oktatásban",
+    "lengthSeconds": "1800"
+  }
+}
