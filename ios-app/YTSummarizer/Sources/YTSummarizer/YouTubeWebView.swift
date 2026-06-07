@@ -251,9 +251,12 @@ private let interceptorJS = """
     // Try to start playback so YouTube initialises the caption track
     setTimeout(tryPlay, 1500);
 
-    // React immediately whenever the CC button (re-)appears — covers ad → video transition
+    // Watch for CC button to become enabled, trigger once, then stop observing.
     var ccObserver = new MutationObserver(function () {
-        if (!didCapture && document.querySelector('.ytp-subtitles-button')) tryTrigger();
+        if (!didCapture && document.querySelector('.ytp-subtitles-button[aria-disabled="false"]')) {
+            ccObserver.disconnect();
+            tryTrigger();
+        }
     });
     ccObserver.observe(document.documentElement, { childList: true, subtree: true });
 

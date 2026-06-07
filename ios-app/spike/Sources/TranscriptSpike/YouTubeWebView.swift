@@ -258,8 +258,12 @@ private let interceptorJS = """
         triggerViaCCButton() || triggerViaPlayerAPI() || triggerViaSettingsMenu();
     }
 
+    // Watch for CC button to appear, trigger once, then stop observing.
     var ccObserver = new MutationObserver(function () {
-        if (!didCapture && document.querySelector('.ytp-subtitles-button')) tryTrigger();
+        if (!didCapture && document.querySelector('.ytp-subtitles-button[aria-disabled="false"]')) {
+            ccObserver.disconnect();
+            tryTrigger();
+        }
     });
     ccObserver.observe(document.documentElement, { childList: true, subtree: true });
 
